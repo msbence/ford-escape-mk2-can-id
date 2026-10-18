@@ -52,16 +52,16 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 
 | Metric | bus | ID | relevant byte(s) | status | calculation | notes |
 |---|---|---|---|---|---|---|
-| **Engine RPM** | HS | `0x180` | 0-1 | Likely | `[0] * 256 + [1]` | - |
-| **Vehicle Speed** | HS | `0x425` | 0-1 | Uncertain | `([0] * 256 + [1]) / 100` | `km/h`, math needs road verification |
-| **Coolant Temp** | MS | `0x423` | 4 | Math ? | ? | Likely `[4] - 40` (°C) |
+| **Engine RPM** | HS | `0x180` | 0-1 | Math ? | ? | - |
+| **Vehicle Speed** | HS | `0x425` | 0-1 | Verified | `([0] * 256 + [1]) / 100` | - |
+| **Coolant Temp** | MS | `0x423` | 4 | Verified | `[4] - 40` (°C) | When no ignition: value is unset, can be any random number, OK after ignition |
 | **Coolant Temp Critical LED** ![led_temp](.img/led_temp.png) | - | - | - | TBD | - | Likely derived from `HS 423` byte 4 |
-| **Gear Position** | HS | `0x510` | 0 | Likely | `P=0x46`, `R=0x3C`, `N=0x32`, `D=0x28`, `L=0x14` | Preferred over noisy `0x500` (which drops random `0xFF`) |
+| **Gear Position** | HS | `0x510` | 0 | Verified | `P=0x46`, `R=0x3C`, `N=0x32`, `D=0x28`, `L=0x14` | Preferred over noisy `0x500` (which has `0xFF` randomly) |
 | **Odometer** | HS | `0x470` | 5 | Math ? | ? | Rollcount byte; absolute total and trip distance N/A here |
 | **Cruise Control ON LED** ![led_cc](.img/led_cc.png) | - | - | - | TBD | - | Likely on HS-CAN (PCM) |
 | **MIL (Check Engine)** ![led_mil](.img/led_mil.png) | - | - | - | TBD | - | - |
 | **Service (Wrench) LED** ![led_wrench](.img/led_wrench.png) | - | - | - | TBD | - | I have desoldered this LED, as it is constantly on with a false positive |
-| **Oil Pressure Low LED** ![led_oil](.img/led_oil.png) | - | - | - | TBD | - | - |
+| **Oil Pressure Low LED** ![led_oil](.img/led_oil.png) | - | - | - | Not found | - | Directly wired to the Instrument Cluster :( |
 | **4x4 Active LED** | - | - | - | TBD | - | Not lighting up on my IC, fauly LED? |
 
 ### Electrical
@@ -72,14 +72,14 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 | **12V Battery Voltage** | - | - | - | TBD | - | - |
 | **Ready LED** ![led_ready](.img/led_ready.png) | - | - | - | TBD | - | Hybrid ready indicator status, normally green :D |
 | **STOP SAFELY NOW (Red Triangle LED)** ![led_stop](.img/led_stop.png) | - | - | - | TBD | - | - |
-| **12V Battery LED** ![led_battery](.img/led_battery.png) | - | - | - | TBD | - | Could be derived from the voltage itself |
+| **12V Battery LED** ![led_battery](.img/led_battery.png) | - | - | - | TBD | - | Directly measured by the Instrument Cluster, but could be derived from the voltage itself |
 
 ### Fuel
 
 | Metric | bus | ID | relevant byte(s) | status | calculation | notes |
 |---|---|---|---|---|---|---|
-| **Fuel Level (Filtered)** | HS | `0x430` | 0 | Likely | `0-255` mapped to `0-100%` | Filtered output (by IC) |
-| **Fuel Level (Raw)** | HS | `0x430` | 1 | Likely | `0-255` mapped to `0-100%` | Raw sensor reading |
+| **Fuel Level (Filtered)** | HS | `0x430` | 0 | Verified | `0-255` mapped to `0-100%` | Filtered output (by IC) |
+| **Fuel Level (Raw)** | HS | `0x430` | 1 | Verified | `0-255` mapped to `0-100%` | Raw sensor reading |
 | **Distance to Empty** | - | - | - | TBD | - | Could be internally calculated in IC |
 | **Low Fuel LED** ![led_fuel](.img/led_fuel.png) | - | - | - | TBD | - | Likely derived from `HS 0x430` byte 0 |
 
@@ -96,24 +96,24 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 
 | Metric | bus | ID | relevant byte(s) | status | calculation | notes |
 |---|---|---|---|---|---|---|
-| **Light Switch Position** | MS | `0x3C3` | 1 | Likely | Off: `0x00`; Parking lights: `0x01`; Auto (Day): `0x02`; Auto (Night): `0x3B`; Fixed On: `0x39` | Auto (Night): `0x03`; Fixed On: `0x01` |
-| **Low Beam Status** | MS | `0x3C3` | 1 | Likely | Manual On: `0x39`; Auto On: `0x3B`; Off: other | could also be just the high hex digit; off when highbeam is on (which is technically true for a H13 bulb) |
-| **High Beam Status** ![led_highbeam](.img/led_highbeam.png) | MS | `0x3C3` | 0 | Likely | Active: `0x02`; Off: `0x00` | - |
-| **Turn Signals** ![led_turn_L](.img/led_turn_L.png) ![led_turn_R](.img/led_turn_R.png) | MS | `0x383` | 0-1 | Likely | **Left:** Byte 0 toggles On (`0x4E`) / Off (`0x0A`); **Right:** Bytes 0-1 toggle On (`0x30 0xC0`) / Off (`0x10 0x40`); **Hazards:** Bytes 0-1 toggle On (`0x64 0x80`) / Off (`0x02 0x40`) | - |
-| **Front Fog Lights** | MS | `0x3C3` | 2 | Likely | Off: `0x00`; Requested: `0x20` | `0x20` does not mean the lights are on! |
-| **Full Interior Lighting** | MS | `0x3C3` | 4 | Likely | High hex digit: On = `0x8X`, Off = `0x0X`, Police / dark car mode (disabled) = `0xCX` | - |
-| **Panel Backlight Dimming** | MS | `0x3AB` | 0-1 | Likely | **Byte 0:** Raw PWM (`254` down to `46`); **Byte 1:** Stepped level for IC backlight (`1`-`21`) | Police mode locks to `140, 14` |
+| **Light Switch Position** | MS | `0x3C3` | 1 | Verified | Off: `0x00`; Parking lights: `0x01`; Auto (Day): `0x02`; Auto (Night): `0x3B`; Fixed On: `0x39` | when highbeam is on the the following change -> Auto (Night): `0x03`; Fixed On: `0x01` ; When no ignition: auto shows day even in dark |
+| **Low Beam Status** | MS | `0x3C3` | 1 | Verified | Manual On: `0x39`; Auto On: `0x3B`; Off: other | could also be just the high hex digit; off when highbeam is on (which is technically true for a H13 bulb) |
+| **High Beam Status** ![led_highbeam](.img/led_highbeam.png) | MS | `0x3C3` | 0 | Verified | Active: `0x02`; Off: `0x00` | When no ignition: if toggled, only shows `0x02` when lightswitch is off or auto(day) |
+| **Turn Signals** ![led_turn_L](.img/led_turn_L.png) ![led_turn_R](.img/led_turn_R.png) | MS | `0x383` | 0-1 | Verified | **Left:** Byte 0 toggles On (`0x4E`) / Off (`0x0A`); **Right:** Bytes 0-1 toggle On (`0x30 0xC0`) / Off (`0x10 0x40`); **Hazards:** Bytes 0-1 toggle On (`0x64 0x80`) / Off (`0x02 0x40`) | - |
+| **Front Fog Lights** | MS | `0x3C3` | 2 | Verified | Off: `0x00`; Requested: `0x20` | `0x20` does not mean the lights are on! |
+| **Full Interior Lighting** | MS | `0x3C3` | 4 | Verified | High hex digit: On = `0x8X`, Off = `0x0X`, Police / dark car mode (disabled) = `0xCX` | - |
+| **Panel Backlight Dimming** | MS | `0x3AB` | 0-1 | Verified | **Byte 0:** Raw PWM (`254` down to `46`); **Byte 1:** Stepped level for IC backlight (`1`-`21`) | Police mode locks to `140, 14` |
 
 ### Body and comfort
 
 | Metric | bus | ID | relevant byte(s) | status | calculation | notes |
 |---|---|---|---|---|---|---|
-| **Key / Ignition State** | MS | `0x3A0` | 0 | Uncertain | Key Removed: `0x11`; Key Inserted: `0x15`; Acc / Run: `0x44` / `0x45`; Crank / Start: `0x84` | Start is just momentary, reverts to `0x44`/`0x45`; investigate diff between `0x44` and `0x45`, could be that high and low hex means different things! |
-| **Door Ajar Status** ![led_door](.img/led_door.png) | MS | `0x3B1` | 0 | Likely | Bitmask flags: Driver Front: `0x80`; Passenger Front: `0x40`; Left Rear: `0x20`; Right Rear: `0x10`; Trunk / Liftgate: `0x06` | `[D][P][LR][RR][0][T][T][0]` |
-| **Central Lock** | MS | `0x385` | 1 | Likely | High hex digit: Locked = `0x1X`, Unlocked = `0x2X` | - |
-| **Handbrake Switch** ![led_handbrake](.img/led_handbrake.png) | HS | `0x430` | 6 | Likely | High hex digit: Engaged: `0x2X`; Disengaged: `0x0X` | - |
-| **Compass Heading** | MS | `0x3C7` | 0-1 | Likely | Raw 2-byte ASCII (space padded for single char, e.g. `"N "` vs `"NE"`) | - |
-| **Tire Pressure (TPMS)** | MS | `0x3B5` | 0-3 | Likely | Values directly in PSI: Front Left: `Byte 0`; Front Right: `Byte 1`; Rear Left: `Byte 2`; Rear Right: `Byte 3` | BAR = PSI / 14.5 |
+| **Key / Ignition State** | MS | `0x3A0` | 0 | Verified | Key Removed: `0x11`; Key Inserted: `0x15`; Acc / Run: `0x44` / `0x45`; Crank / Start: `0x84` | Start is just momentary, reverts to `0x44`/`0x45`; investigate diff between `0x44` and `0x45`, could be that high and low hex means different things! |
+| **Door Ajar Status** ![led_door](.img/led_door.png) | MS | `0x3B1` | 0 | Verified | Bitmask flags: Driver Front: `0x80`; Passenger Front: `0x40`; Left Rear: `0x20`; Right Rear: `0x10`; Trunk / Liftgate: `0x06` | `[D][P][LR][RR][0][T][T][0]` |
+| **Central Lock** | MS | `0x385` | 1 | Verified | High hex digit: All locked = `0x1X`, Unlocked = `0x2X` | Didn't test with 2-stage lock mode |
+| **Handbrake Switch** ![led_handbrake](.img/led_handbrake.png) | HS | `0x430` | 6 | Verified | High hex digit: Engaged: `0x2X`; Disengaged: `0x0X` | - |
+| **Compass Heading** | MS | `0x3C7` | 0-1 | Verified | Raw 2-byte ASCII (space padded for single char, e.g. `"N "` vs `"NE"`) | Empty ("  ") before ignition |
+| **Tire Pressure (TPMS)** | MS | `0x3B5` | 0-3 | Verified | Values directly in PSI: Front Left: `Byte 0`; Front Right: `Byte 1`; Rear Left: `Byte 2`; Rear Right: `Byte 3` | BAR = PSI / 14.5 |
 | **Tire Pressure Warning (TPMS) LED** ![led_tpms](.img/led_tpms.png) | - | - | - | TBD | - | Could be derived from MS `0x3B5` |
 | **PATS / Immobilizer LED** ![led_pats](.img/led_pats.png) | - | - | - | TBD | - | - |
 
@@ -121,16 +121,16 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 
 | Metric | bus | ID | relevant byte(s) | status | calculation | notes |
 |---|---|---|---|---|---|---|
-| **Driver Setpoint Temp** | MS | `0x3C8` | 0-1,5 | Uncertain | 0-1 -> ASCII pair: e.g. `"16"` = `0x31 0x36`, `"24"` = `0x32 0x34`, `"32"` = `0x33 0x32` | .5 step: byte 5, bit 3,2 = `10` (`01` on .0) |
-| **Passenger Setpoint Temp** | MS | `0x3C8` | 2-3,5 | Uncertain | 2-3 -> ASCII pair (same mapping as driver) | .5 step: byte 5, bit 1,0 = `10` (`01` on .0) |
-| **Passenger Dual Zone Active** | MS | `0x3C8` | 7 | Likely | High hex digit: Active = `0xCX`, Off = `0x4X` | - |
-| **Blower Fan Speed** | MS | `0x3C8` | 6 | Likely | Low hex digit: Off=`0xX0`, Auto=`0xX1`, Speed 1=`0xX3`, Speed 2=`0xX5`, Speed 3=`0xX7`, Speed 4=`0xX9`, Speed 5=`0xXB`, Speed 6=`0xXD`, Speed 7=`0xXF` | Auto is for the speed, it is not the AUTO A/C mode |
+| **Driver Setpoint Temp** | MS | `0x3C8` | 0-1,5 | Verified | 0-1 -> ASCII pair: e.g. `"16"` = `0x31 0x36`, `"24"` = `0x32 0x34`, `"32"` = `0x33 0x32` | .5 step: byte 5, bit 3,2 = `10` (`01` on .0) ; "F" when ignition off |
+| **Passenger Setpoint Temp** | MS | `0x3C8` | 2-3,5 | Verified | 2-3 -> ASCII pair (same mapping as driver) | .5 step: byte 5, bit 1,0 = `10` (`01` on .0) ; "F" when ignition off, "C" before first dual zone activation |
+| **Passenger Dual Zone Active** | MS | `0x3C8` | 7 | Verified | High hex digit: Active = `0xCX`, Off = `0x4X` | - |
+| **Blower Fan Speed** | MS | `0x3C8` | 6 | Verified | Low hex digit: Off=`0xX0`, Auto=`0xX1`, Speed 1=`0xX3`, Speed 2=`0xX5`, Speed 3=`0xX7`, Speed 4=`0xX9`, Speed 5=`0xXB`, Speed 6=`0xXD`, Speed 7=`0xXF` | Auto is for the speed, it is not the AUTO A/C mode |
 | **Airflow direction** | - | - | - | TBD | - | - |
 | **Heated seat** | - | - | - | TBD | - | - |
 | **Air Circulation mode** | - | - | - | TBD | - | - |
-| **Temperature Unit** | MS | `0x3C8` | 6 | Likely | High hex digit: °C = `0x1X`, °F = `0x2X` | This changes the temp bytes as well |
-| **A/C Clutch Request** | HS | `0x180` | 2 | Likely | High hex digit: A/C Requested = `0x1X`, Off = `0x0X` | Also on MS: `0x3A1`, Byte 0, Requested=`0x80` / Off=`0x00` |
-| **A/C Compressor Active** | MS | `0x3A4` | 0 | Likely | High hex digit: Active = `0x8X`, Inactive = `0x0X` | - |
+| **Temperature Unit** | MS | `0x3C8` | 6 | Verified | High hex digit: °C = `0x1X`, °F = `0x2X` | This changes the temp bytes as well |
+| **A/C Clutch Request** | MS | `0x3A1` | 0 | Verified | A/C Requested=`0x80`, Off=`0x00` | Also on HS: `0x180`, Byte 2, High hex digit: A/C Requested = `0x1X`, Off = `0x0X` ; seems more stable on MS |
+| **A/C Compressor Active** | MS | `0x3A4` | 0 | Verified | High hex digit: Active = `0x8X`, Inactive = `0x0X` | - |
 
 ## How-To
 
