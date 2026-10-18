@@ -96,24 +96,24 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 
 | Metric | bus | ID | relevant byte(s) | status | calculation | notes |
 |---|---|---|---|---|---|---|
-| **Light Switch Position** | MS | `0x3C3` | 1 | Likely | `0x00`: Off; `0x01`: Parking lights; `0x02`: Auto (Daytime); `0x39`: Headlights On; `0x3B`: Auto (Night / Headlights active) | drops to `0x01` when high beam active, at least in "ON" state (TODO: test) |
-| **Low Beam Status** | MS | `0x3C3` | 1 | Likely | `0x39`: Manual On; `0x3B`: Auto On; other: Off | could also be just the high hex digit; off when highbeam is on (which is technically true for a H13 bulb) |
-| **High Beam Status** ![led_highbeam](.img/led_highbeam.png) | MS | `0x3C3` | 0 | Likely | `0x02`: Active; `0x00`: Off | - |
-| **Turn Signals** ![led_turn_L](.img/led_turn_L.png) ![led_turn_R](.img/led_turn_R.png) | MS | `0x383` | 0-1 | Likely | **Left:** Byte 0 toggles `0x4E` (On) / `0x0A` (Off); **Right:** Bytes 0-1 toggle `0x30 0xC0` (On) / `0x10 0x40` (Off); **Hazards:** Bytes 0-1 toggle `0x64 0x80` (On) / `0x02 0x40` (Off) | - |
-| **Front Fog Lights** | MS | `0x3C3` | 2 | Likely | `0x00`: Off; `0x20`: Requested | `0x20` does not mean the lights are on! |
-| **Full Interior Lighting** | MS | `0x3C3` | 4 | Likely | High hex digit: `0x8X` = On, `0x0X` = Off, `0xCX` = Police / dark car mode (disabled) | - |
+| **Light Switch Position** | MS | `0x3C3` | 1 | Likely | Off: `0x00`; Parking lights: `0x01`; Auto (Day): `0x02`; Auto (Night): `0x3B`; Fixed On: `0x39` | Auto (Night): `0x03`; Fixed On: `0x01` |
+| **Low Beam Status** | MS | `0x3C3` | 1 | Likely | Manual On: `0x39`; Auto On: `0x3B`; Off: other | could also be just the high hex digit; off when highbeam is on (which is technically true for a H13 bulb) |
+| **High Beam Status** ![led_highbeam](.img/led_highbeam.png) | MS | `0x3C3` | 0 | Likely | Active: `0x02`; Off: `0x00` | - |
+| **Turn Signals** ![led_turn_L](.img/led_turn_L.png) ![led_turn_R](.img/led_turn_R.png) | MS | `0x383` | 0-1 | Likely | **Left:** Byte 0 toggles On (`0x4E`) / Off (`0x0A`); **Right:** Bytes 0-1 toggle On (`0x30 0xC0`) / Off (`0x10 0x40`); **Hazards:** Bytes 0-1 toggle On (`0x64 0x80`) / Off (`0x02 0x40`) | - |
+| **Front Fog Lights** | MS | `0x3C3` | 2 | Likely | Off: `0x00`; Requested: `0x20` | `0x20` does not mean the lights are on! |
+| **Full Interior Lighting** | MS | `0x3C3` | 4 | Likely | High hex digit: On = `0x8X`, Off = `0x0X`, Police / dark car mode (disabled) = `0xCX` | - |
 | **Panel Backlight Dimming** | MS | `0x3AB` | 0-1 | Likely | **Byte 0:** Raw PWM (`254` down to `46`); **Byte 1:** Stepped level for IC backlight (`1`-`21`) | Police mode locks to `140, 14` |
 
 ### Body and comfort
 
 | Metric | bus | ID | relevant byte(s) | status | calculation | notes |
 |---|---|---|---|---|---|---|
-| **Key / Ignition State** | MS | `0x3A0` | 0 | Uncertain | `0x11`: Key Removed; `0x15`: Key Inserted; `0x44` / `0x45`: Acc / Run; `0x84`: Crank / Start | Start is just momentary, reverts to `0x44`/`0x45`; investigate diff between `0x44` and `0x45`, could be that high and low hex means different things! |
-| **Door Ajar Status** ![led_door](.img/led_door.png) | MS | `0x3B1` | 0 | Likely | Bitmask flags: `0x80`: Driver Front; `0x40`: Passenger Front; `0x20`: Left Rear; `0x10`: Right Rear; `0x06`: Trunk / Liftgate | `[D][P][LR][RR][0][T][T][0]` |
-| **Central Lock** | MS | `0x385` | 1 | Likely | High hex digit: `0x1X` = Locked, `0x2X` = Unlocked | - |
-| **Handbrake Switch** ![led_handbrake](.img/led_handbrake.png) | HS | `0x430` | 6 | Likely | High hex digit: `0x2X`: Engaged; `0x0X`: Disengaged | - |
+| **Key / Ignition State** | MS | `0x3A0` | 0 | Uncertain | Key Removed: `0x11`; Key Inserted: `0x15`; Acc / Run: `0x44` / `0x45`; Crank / Start: `0x84` | Start is just momentary, reverts to `0x44`/`0x45`; investigate diff between `0x44` and `0x45`, could be that high and low hex means different things! |
+| **Door Ajar Status** ![led_door](.img/led_door.png) | MS | `0x3B1` | 0 | Likely | Bitmask flags: Driver Front: `0x80`; Passenger Front: `0x40`; Left Rear: `0x20`; Right Rear: `0x10`; Trunk / Liftgate: `0x06` | `[D][P][LR][RR][0][T][T][0]` |
+| **Central Lock** | MS | `0x385` | 1 | Likely | High hex digit: Locked = `0x1X`, Unlocked = `0x2X` | - |
+| **Handbrake Switch** ![led_handbrake](.img/led_handbrake.png) | HS | `0x430` | 6 | Likely | High hex digit: Engaged: `0x2X`; Disengaged: `0x0X` | - |
 | **Compass Heading** | MS | `0x3C7` | 0-1 | Likely | Raw 2-byte ASCII (space padded for single char, e.g. `"N "` vs `"NE"`) | - |
-| **Tire Pressure (TPMS)** | MS | `0x3B5` | 0-3 | Likely | Values directly in PSI: `Byte 0`: Front Left; `Byte 1`: Front Right; `Byte 2`: Rear Left; `Byte 3`: Rear Right | BAR = PSI / 14.5 |
+| **Tire Pressure (TPMS)** | MS | `0x3B5` | 0-3 | Likely | Values directly in PSI: Front Left: `Byte 0`; Front Right: `Byte 1`; Rear Left: `Byte 2`; Rear Right: `Byte 3` | BAR = PSI / 14.5 |
 | **Tire Pressure Warning (TPMS) LED** ![led_tpms](.img/led_tpms.png) | - | - | - | TBD | - | Could be derived from MS `0x3B5` |
 | **PATS / Immobilizer LED** ![led_pats](.img/led_pats.png) | - | - | - | TBD | - | - |
 
@@ -121,16 +121,16 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 
 | Metric | bus | ID | relevant byte(s) | status | calculation | notes |
 |---|---|---|---|---|---|---|
-| **Driver Setpoint Temp** | MS | `0x3C8` | 0-1 | Uncertain | ASCII pair: e.g. `0x31 0x36` = `"16"`, `0x32 0x34` = `"24"`, `0x33 0x32` = `"32"` | TODO: test 0.5 steps |
-| **Passenger Setpoint Temp** | MS | `0x3C8` | 2-3 | Uncertain | ASCII pair (same mapping as driver) | - |
-| **Passenger Dual Zone Active** | MS | `0x3C8` | 7 | Likely | High hex digit: `0xCX` = Active, `0x4X` = Off | - |
-| **Blower Fan Speed** | MS | `0x3C8` | 6 | Likely | Low hex digit: `0xX0`=Off, `0xX1`=Auto, `0xX3`=Speed 1, `0xX5`=Speed 2, `0xX7`=Speed 3, `0xX9`=Speed 4, `0xXB`=Speed 5, `0xXD`=Speed 6, `0xXF`=Speed 7 | Auto is for the speed, it is not the AUTO A/C mode |
+| **Driver Setpoint Temp** | MS | `0x3C8` | 0-1,5 | Uncertain | 0-1 -> ASCII pair: e.g. `"16"` = `0x31 0x36`, `"24"` = `0x32 0x34`, `"32"` = `0x33 0x32` | .5 step: byte 5, bit 3,2 = `10` (`01` on .0) |
+| **Passenger Setpoint Temp** | MS | `0x3C8` | 2-3,5 | Uncertain | 2-3 -> ASCII pair (same mapping as driver) | .5 step: byte 5, bit 1,0 = `10` (`01` on .0) |
+| **Passenger Dual Zone Active** | MS | `0x3C8` | 7 | Likely | High hex digit: Active = `0xCX`, Off = `0x4X` | - |
+| **Blower Fan Speed** | MS | `0x3C8` | 6 | Likely | Low hex digit: Off=`0xX0`, Auto=`0xX1`, Speed 1=`0xX3`, Speed 2=`0xX5`, Speed 3=`0xX7`, Speed 4=`0xX9`, Speed 5=`0xXB`, Speed 6=`0xXD`, Speed 7=`0xXF` | Auto is for the speed, it is not the AUTO A/C mode |
 | **Airflow direction** | - | - | - | TBD | - | - |
 | **Heated seat** | - | - | - | TBD | - | - |
 | **Air Circulation mode** | - | - | - | TBD | - | - |
-| **Temperature Unit** | MS | `0x3C8` | 6 | Likely | High hex digit: `0x1X` = °C, `0x2X` = °F | This changes the temp bytes as well |
-| **A/C Clutch Request** | HS | `0x180` | 2 | Likely | High hex digit: `0x1X` = A/C Requested, `0x0X` = Off | Also on MS: `0x3A1`, Byte 0, `0x80`=Requested / `0x00`=Off |
-| **A/C Compressor Active** | MS | `0x3A4` | 0 | Likely | High hex digit: `0x8X` = Active, `0x0X` = Inactive | - |
+| **Temperature Unit** | MS | `0x3C8` | 6 | Likely | High hex digit: °C = `0x1X`, °F = `0x2X` | This changes the temp bytes as well |
+| **A/C Clutch Request** | HS | `0x180` | 2 | Likely | High hex digit: A/C Requested = `0x1X`, Off = `0x0X` | Also on MS: `0x3A1`, Byte 0, Requested=`0x80` / Off=`0x00` |
+| **A/C Compressor Active** | MS | `0x3A4` | 0 | Likely | High hex digit: Active = `0x8X`, Inactive = `0x0X` | - |
 
 ## How-To
 
