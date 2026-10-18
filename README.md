@@ -1,1 +1,175 @@
 # ford-escape-mk2-can-id
+
+This repository documents my CANbus reverse engineering efforts attempted on a Ford Escape 2009 Limited Hybrid. 
+
+![ic_full](.img/ic_full.png)
+
+> [!WARNING]
+> Please be careful when messing with your vehicle! It is always a good idea to experiment on test hardware, make sure that you can recover from a module failure, and in general that you understand what you are doing.  
+**If this sets off an airbag, bricks an ECU, or blows up your car, that's entirely on you. Use at your own risk.**
+
+---
+
+## Motivation
+
+As someone working in IT, I have always been interested in how car ECUs work; add my need for customization, and you already see where I am going. I bought a VCM2 programmer and FORScan, and did some module parameter programming on my own. Then I got into the world of CAN frames by implementing the FoDiMoCo project on my Escape. While I was experimenting with Arduinos back then, my first car-related project was replacing the 8-color ambient floor lighting with a true 16M RGB setup (which was really just about replacing the control module itself).
+
+Recently, my wife got herself a 2025 Ford Puma, and of course I immediately FORScanned the heck out of it. There are good and bad things about new cars, and not going to lie: I considered for a long time whether I should get a Kuga (the successor to the Escape - at least on paper... it has nothing to do with the 2nd Gen Escape platform), but in the end I decided to keep my current car as long as reasonable. I did just pass 400,000 km, and living in the EU means not many spare parts for me. While a lot of people out there dislike "tablet/screen-only cars", I don't: I hate when they remove physical buttons (like climate control, instrument cluster backlight, etc.), but I actually like the screens themselves. So it occurred to me that I could maybe build a modern instrument cluster for my old Escape. Whether it works or not remains to be seen, but reverse engineering CAN messages is the first step, and I decided to share my findings with others who might be interested.
+
+From a CAN bus perspective, the Escape follows what other Ford vehicles have: an MS-CAN line operating at 125 kbps for non-critical modules (like climate control), and an HS-CAN line running at 500 kbps where the critical stuff lives (like powertrain and chassis modules). Unlike in newer cars where the two CAN lines are bridged via a dedicated Gateway Module, on this platform it is the Instrument Cluster that does the bridging. This made it my primary target, along with the fact that it is the exact unit I am looking to "replace." So I built a small hardware setup to tap into both CAN buses, monitor changes, and try to decode what means what.
+
+It would have been better to grab the firmware (the so-called strategy) and reverse engineer that directly, but I was unable to find one. In theory, I could read it with a programmer attached to the debug headers on the cluster's PCB, but I don't want to risk bricking my working cluster with methods I am not entirely familiar with (and unfortunately, my testbench module is not from a Hybrid, so I can't just pull the calibration from that).
+
+## Vehicle parameters
+
+- **Make and model**: Ford Escape Hybrid
+- **Year**: 2009 (2nd Gen)
+- **Trim**: Limited
+- **Engine**: 2.5L Atkinson-cycle I-4
+- **Transmission**: eCVT Automatic
+- **Drivetrain**: 4WD
+- **Climate Control**: Dual-Zone Electronic Automatic
+- **Infotainment**: originally a no-screen SYNC 6-disc radio -> replaced with aftermarked Topway head unit
+- **Cruise Control**: equipped
+
+- **Instrument Cluster strategy version**: `9M6T-10C026-BC`
+- **Instrument Cluster calibration version**: `9M6T-10849-CC`
+
+## CAN frames
+
+### Status Legend
+
+| Status | Description |
+|---|---|
+| Verified | Confirmed and functional mapping |
+| Likely | Almost certain, but requires final bench verification |
+| Math ? | The Frame ID and byte is mapped, but the calculation is unknown |
+| Uncertain | Just a hypothesis, low confidence |
+| TBD | Planned item, not yet or unsuccessfully investigated |
+| Not found | Quite certain that the metric is not transmitted |
+
+### Powertrain
+
+| Metric | bus | ID | relevant byte(s) | status | calculation | notes |
+|---|---|---|---|---|---|---|
+| **Engine RPM** | HS | `0x180` | 0-1 | Likely | `[0] * 256 + [1]` | - |
+| **Vehicle Speed** | HS | `0x425` | 0-1 | Uncertain | `([0] * 256 + [1]) / 100` | `km/h`, math needs road verification |
+| **Coolant Temp** | MS | `0x423` | 4 | Math ? | ? | Likely `[4] - 40` (°C) |
+| **Coolant Temp Critical LED** ![led_temp](.img/led_temp.png) | - | - | - | TBD | - | Likely derived from `HS 423` byte 4 |
+| **Gear Position** | HS | `0x510` | 0 | Likely | `P=0x46`, `R=0x3C`, `N=0x32`, `D=0x28`, `L=0x14` | Preferred over noisy `0x500` (which drops random `0xFF`) |
+| **Odometer** | HS | `0x470` | 5 | Math ? | ? | Rollcount byte; absolute total and trip distance N/A here |
+| **Cruise Control ON LED** ![led_cc](.img/led_cc.png) | - | - | - | TBD | - | Likely on HS-CAN (PCM) |
+| **MIL (Check Engine)** ![led_mil](.img/led_mil.png) | - | - | - | TBD | - | - |
+| **Service (Wrench) LED** ![led_wrench](.img/led_wrench.png) | - | - | - | TBD | - | I have desoldered this LED, as it is constantly on with a false positive |
+| **Oil Pressure Low LED** ![led_oil](.img/led_oil.png) | - | - | - | TBD | - | - |
+| **4x4 Active LED** | - | - | - | TBD | - | Not lighting up on my IC, fauly LED? |
+
+### Electrical
+
+| Metric | bus | ID | relevant byte(s) | status | calculation | notes |
+|---|---|---|---|---|---|---|
+| **Charge / Assist Gauge** | HS | `0x300` | 1-2 / 3 | Uncertain | ? | - |
+| **12V Battery Voltage** | - | - | - | TBD | - | - |
+| **Ready LED** ![led_ready](.img/led_ready.png) | - | - | - | TBD | - | Hybrid ready indicator status, normally green :D |
+| **STOP SAFELY NOW (Red Triangle LED)** ![led_stop](.img/led_stop.png) | - | - | - | TBD | - | - |
+| **12V Battery LED** ![led_battery](.img/led_battery.png) | - | - | - | TBD | - | Could be derived from the voltage itself |
+
+### Fuel
+
+| Metric | bus | ID | relevant byte(s) | status | calculation | notes |
+|---|---|---|---|---|---|---|
+| **Fuel Level (Filtered)** | HS | `0x430` | 0 | Likely | `0-255` mapped to `0-100%` | Filtered output (by IC) |
+| **Fuel Level (Raw)** | HS | `0x430` | 1 | Likely | `0-255` mapped to `0-100%` | Raw sensor reading |
+| **Distance to Empty** | - | - | - | TBD | - | Could be internally calculated in IC |
+| **Low Fuel LED** ![led_fuel](.img/led_fuel.png) | - | - | - | TBD | - | Likely derived from `HS 0x430` byte 0 |
+
+### Safety
+
+| Metric | bus | ID | relevant byte(s) | status | calculation | notes |
+|---|---|---|---|---|---|---|
+| **Airbag LED** ![led_airbag](.img/led_airbag.png) | - | - | - | TBD | - | - |
+| **ABS Fault LED** ![led_abs](.img/led_abs.png) | - | - | - | TBD | - | - |
+| **Seatbelt Reminder LED** ![led_belt](.img/led_belt.png) | - | - | - | TBD | - | - |
+| **TCS Indicator** ![led_tcs](.img/led_tcs.png) | - | - | - | TBD | - | - |
+
+### Lighting
+
+| Metric | bus | ID | relevant byte(s) | status | calculation | notes |
+|---|---|---|---|---|---|---|
+| **Light Switch Position** | MS | `0x3C3` | 1 | Likely | `0x00`: Off; `0x01`: Parking lights; `0x02`: Auto (Daytime); `0x39`: Headlights On; `0x3B`: Auto (Night / Headlights active) | drops to `0x01` when high beam active, at least in "ON" state (TODO: test) |
+| **Low Beam Status** | MS | `0x3C3` | 1 | Likely | `0x39`: Manual On; `0x3B`: Auto On; other: Off | could also be just the high hex digit; off when highbeam is on (which is technically true for a H13 bulb) |
+| **High Beam Status** ![led_highbeam](.img/led_highbeam.png) | MS | `0x3C3` | 0 | Likely | `0x02`: Active; `0x00`: Off | - |
+| **Turn Signals** ![led_turn_L](.img/led_turn_L.png) ![led_turn_R](.img/led_turn_R.png) | MS | `0x383` | 0-1 | Likely | **Left:** Byte 0 toggles `0x4E` (On) / `0x0A` (Off); **Right:** Bytes 0-1 toggle `0x30 0xC0` (On) / `0x10 0x40` (Off); **Hazards:** Bytes 0-1 toggle `0x64 0x80` (On) / `0x02 0x40` (Off) | - |
+| **Front Fog Lights** | MS | `0x3C3` | 2 | Likely | `0x00`: Off; `0x20`: Requested | `0x20` does not mean the lights are on! |
+| **Full Interior Lighting** | MS | `0x3C3` | 4 | Likely | High hex digit: `0x8X` = On, `0x0X` = Off, `0xCX` = Police / dark car mode (disabled) | - |
+| **Panel Backlight Dimming** | MS | `0x3AB` | 0-1 | Likely | **Byte 0:** Raw PWM (`254` down to `46`); **Byte 1:** Stepped level for IC backlight (`1`-`21`) | Police mode locks to `140, 14` |
+
+### Body and comfort
+
+| Metric | bus | ID | relevant byte(s) | status | calculation | notes |
+|---|---|---|---|---|---|---|
+| **Key / Ignition State** | MS | `0x3A0` | 0 | Uncertain | `0x11`: Key Removed; `0x15`: Key Inserted; `0x44` / `0x45`: Acc / Run; `0x84`: Crank / Start | Start is just momentary, reverts to `0x44`/`0x45`; investigate diff between `0x44` and `0x45`, could be that high and low hex means different things! |
+| **Door Ajar Status** ![led_door](.img/led_door.png) | MS | `0x3B1` | 0 | Likely | Bitmask flags: `0x80`: Driver Front; `0x40`: Passenger Front; `0x20`: Left Rear; `0x10`: Right Rear; `0x06`: Trunk / Liftgate | `[D][P][LR][RR][0][T][T][0]` |
+| **Central Lock** | MS | `0x385` | 1 | Likely | High hex digit: `0x1X` = Locked, `0x2X` = Unlocked | - |
+| **Handbrake Switch** ![led_handbrake](.img/led_handbrake.png) | HS | `0x430` | 6 | Likely | High hex digit: `0x2X`: Engaged; `0x0X`: Disengaged | - |
+| **Compass Heading** | MS | `0x3C7` | 0-1 | Likely | Raw 2-byte ASCII (space padded for single char, e.g. `"N "` vs `"NE"`) | - |
+| **Tire Pressure (TPMS)** | MS | `0x3B5` | 0-3 | Likely | Values directly in PSI: `Byte 0`: Front Left; `Byte 1`: Front Right; `Byte 2`: Rear Left; `Byte 3`: Rear Right | BAR = PSI / 14.5 |
+| **Tire Pressure Warning (TPMS) LED** ![led_tpms](.img/led_tpms.png) | - | - | - | TBD | - | Could be derived from MS `0x3B5` |
+| **PATS / Immobilizer LED** ![led_pats](.img/led_pats.png) | - | - | - | TBD | - | - |
+
+### Climate Control (HVAC)
+
+| Metric | bus | ID | relevant byte(s) | status | calculation | notes |
+|---|---|---|---|---|---|---|
+| **Driver Setpoint Temp** | MS | `0x3C8` | 0-1 | Uncertain | ASCII pair: e.g. `0x31 0x36` = `"16"`, `0x32 0x34` = `"24"`, `0x33 0x32` = `"32"` | TODO: test 0.5 steps |
+| **Passenger Setpoint Temp** | MS | `0x3C8` | 2-3 | Uncertain | ASCII pair (same mapping as driver) | - |
+| **Passenger Dual Zone Active** | MS | `0x3C8` | 7 | Likely | High hex digit: `0xCX` = Active, `0x4X` = Off | - |
+| **Blower Fan Speed** | MS | `0x3C8` | 6 | Likely | Low hex digit: `0xX0`=Off, `0xX1`=Auto, `0xX3`=Speed 1, `0xX5`=Speed 2, `0xX7`=Speed 3, `0xX9`=Speed 4, `0xXB`=Speed 5, `0xXD`=Speed 6, `0xXF`=Speed 7 | Auto is for the speed, it is not the AUTO A/C mode |
+| **Airflow direction** | - | - | - | TBD | - | - |
+| **Heated seat** | - | - | - | TBD | - | - |
+| **Air Circulation mode** | - | - | - | TBD | - | - |
+| **Temperature Unit** | MS | `0x3C8` | 6 | Likely | High hex digit: `0x1X` = °C, `0x2X` = °F | This changes the temp bytes as well |
+| **A/C Clutch Request** | HS | `0x180` | 2 | Likely | High hex digit: `0x1X` = A/C Requested, `0x0X` = Off | Also on MS: `0x3A1`, Byte 0, `0x80`=Requested / `0x00`=Off |
+| **A/C Compressor Active** | MS | `0x3A4` | 0 | Likely | High hex digit: `0x8X` = Active, `0x0X` = Inactive | - |
+
+## How-To
+
+_This guide is brief on purpose. If you know what you are doing then this should get you started._
+
+1. Purchase: teensy 4.0, 2x SN65HVD230, OBD-2 female breakout cable
+2. Install PlatformIO on your machine
+3. Clone this repository
+4. Connect the teensy 4.0 to your machine
+5. Run `pio run -t upload` in the repo root
+6. Wire the CAN transceivers to your teensy 4.0
+7. Identify which color is which pin on your OBD-2 breakout cable
+8. Connect: Pin3 to MS-CAN_H, Pin11 to MS-CAN_L, Pin6 to HS-CAN_H, Pin14 to HS-CAN_L, Pin5 to GND
+9. Attach the OBD-2 cable to your car
+10. Run `pio device monitor` to observe CAN traffic
+11. You can also run `python3 sniffer.py /dev/ttyACM0` to better monitor changes
+
+![obd2_pins](.img/obd2_pins.png)
+
+![sniffer](.img/sniffer.png)
+
+## Acknowledgments
+
+- My mechanic who was kind enough to provide me test modules for free (and all this in the EU, for a US-only car!)
+- Chris Valasek and Charlie Miller for their detailed research: [Adventures in Automotive Networks and Control Units](https://www.ioactive.com/wp-content/uploads/pdfs/IOActive_Adventures_in_Automotive_Networks_and_Control_Units.pdf)
+- p1ne for the FoDiMoCo project, that provided me a great starting point: [fdim-controller] (https://p1ne.github.io/fdim-controller/)
+- LEMON Manuals, for the wiring diagrams so that I could set up my test bench
+- pinoutguide/pinouts for the Ford-specific OBD-2 [pinout guide](https://pinoutguide.com/CarElectronics/ford_obd_2_pinout.shtml)
+
+## LLM
+
+The README and C++ code were written by hand, but the Python visualizer is just a throwaway script with no long-term maintenance in mind, so I let Gemini write it to save time.
+
+...in guessing the CAN frames, they were more than than useless obviously :)
+
+---
+
+## License
+
+It's just [WTFPL](https://www.wtfpl.net/about/).
+
+Attribution is also 100% optional, but always appreciated.
