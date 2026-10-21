@@ -52,12 +52,12 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 
 | Metric | bus | ID | relevant byte(s) | status | calculation | notes |
 |---|---|---|---|---|---|---|
-| **Engine RPM** | HS | `0x180` | 0-1 | Math ? | ? | - |
+| **Engine RPM** | HS | `0x180` | 0-1 | Verified | `([0] * 256 + [1]) / 4` | - |
 | **Vehicle Speed** | HS | `0x425` | 0-1 | Verified | `([0] * 256 + [1]) / 100` | - |
 | **Coolant Temp** | MS | `0x423` | 4 | Verified | `[4] - 40` (°C) | When no ignition: value is unset, can be any random number, OK after ignition |
 | **Coolant Temp Critical LED** ![led_temp](.img/led_temp.png) | - | - | - | TBD | - | Likely derived from `HS 423` byte 4 |
 | **Gear Position** | HS | `0x510` | 0 | Verified | `P=0x46`, `R=0x3C`, `N=0x32`, `D=0x28`, `L=0x14` | Preferred over noisy `0x500` (which has `0xFF` randomly) |
-| **Odometer** | HS | `0x470` | 5 | Math ? | ? | Rollcount byte; absolute total and trip distance N/A here |
+| **Odometer** | HS | `0x470` | 5 | Math ? | ? | Rollcount byte; 1.0 km -> ~20 rollover |
 | **Cruise Control ON LED** ![led_cc](.img/led_cc.png) | - | - | - | TBD | - | Likely on HS-CAN (PCM) |
 | **MIL (Check Engine)** ![led_mil](.img/led_mil.png) | - | - | - | TBD | - | - |
 | **Service (Wrench) LED** ![led_wrench](.img/led_wrench.png) | - | - | - | TBD | - | I have desoldered this LED, as it is constantly on with a false positive |
@@ -89,8 +89,8 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 |---|---|---|---|---|---|---|
 | **Airbag LED** ![led_airbag](.img/led_airbag.png) | - | - | - | TBD | - | - |
 | **ABS Fault LED** ![led_abs](.img/led_abs.png) | - | - | - | TBD | - | - |
-| **Seatbelt Reminder LED** ![led_belt](.img/led_belt.png) | - | - | - | TBD | - | - |
-| **TCS Indicator** ![led_tcs](.img/led_tcs.png) | - | - | - | TBD | - | - |
+| **Seatbelt Reminder LED** ![led_belt](.img/led_belt.png) | HS | `0x350` | 0 | Verified | Low hex digit: On = `0xX4`, Off = `0xX0` | Seatbelt status on `0x340`, driver: byte 1 = `00` when using seatbelt, `02` when not; passenger: byte 3 `40` when using seatbelt, `00` when not. Only active when IC BeltMinder is ON, AND only 40-60 secs after ignition.|
+| **TCS Indicator** ![led_tcs](.img/led_tcs.png) | HS | `0x417` | 1 | Verified | High hex digit: TCS On = `0x0X`, TCS Off = `0x4X` (=LED on) | TCS intervene (blinking LED) is TBD |
 
 ### Lighting
 
@@ -114,7 +114,7 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 | **Handbrake Switch** ![led_handbrake](.img/led_handbrake.png) | HS | `0x430` | 6 | Verified | High hex digit: Engaged: `0x2X`; Disengaged: `0x0X` | - |
 | **Compass Heading** | MS | `0x3C7` | 0-1 | Verified | Raw 2-byte ASCII (space padded for single char, e.g. `"N "` vs `"NE"`) | Empty ("  ") before ignition |
 | **Tire Pressure (TPMS)** | MS | `0x3B5` | 0-3 | Verified | Values directly in PSI: Front Left: `Byte 0`; Front Right: `Byte 1`; Rear Left: `Byte 2`; Rear Right: `Byte 3` | BAR = PSI / 14.5 |
-| **Tire Pressure Warning (TPMS) LED** ![led_tpms](.img/led_tpms.png) | - | - | - | TBD | - | Could be derived from MS `0x3B5` |
+| **Tire Pressure Warning (TPMS) LED** ![led_tpms](.img/led_tpms.png) | MS | `0x3B5` | 0-3 | Likely | Triggers on sensor fault, if any of the bytes are `FD` | Low pressure is derived from MS `0x3B5` |
 | **PATS / Immobilizer LED** ![led_pats](.img/led_pats.png) | - | - | - | TBD | - | - |
 
 ### Climate Control (HVAC)
@@ -124,6 +124,7 @@ It would have been better to grab the firmware (the so-called strategy) and reve
 | **Driver Setpoint Temp** | MS | `0x3C8` | 0-1,5 | Verified | 0-1 -> ASCII pair: e.g. `"16"` = `0x31 0x36`, `"24"` = `0x32 0x34`, `"32"` = `0x33 0x32` | .5 step: byte 5, bit 3,2 = `10` (`01` on .0) ; "F" when ignition off |
 | **Passenger Setpoint Temp** | MS | `0x3C8` | 2-3,5 | Verified | 2-3 -> ASCII pair (same mapping as driver) | .5 step: byte 5, bit 1,0 = `10` (`01` on .0) ; "F" when ignition off, "C" before first dual zone activation |
 | **Passenger Dual Zone Active** | MS | `0x3C8` | 7 | Verified | High hex digit: Active = `0xCX`, Off = `0x4X` | - |
+| **Outside Temp** | - | - | - | TBD | - | - |
 | **Blower Fan Speed** | MS | `0x3C8` | 6 | Verified | Low hex digit: Off=`0xX0`, Auto=`0xX1`, Speed 1=`0xX3`, Speed 2=`0xX5`, Speed 3=`0xX7`, Speed 4=`0xX9`, Speed 5=`0xXB`, Speed 6=`0xXD`, Speed 7=`0xXF` | Auto is for the speed, it is not the AUTO A/C mode |
 | **Airflow direction** | - | - | - | TBD | - | - |
 | **Heated seat** | - | - | - | TBD | - | - |
